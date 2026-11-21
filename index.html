@@ -10,7 +10,7 @@ var RELAY="https://ntfy.sh",$=function(i){return document.getElementById(i)},enc
 function ub(s){s=s.replace(/-/g,"+").replace(/_/g,"/");while(s.length%4)s+="=";var r=atob(s),a=new Uint8Array(r.length);for(var i=0;i<r.length;i++)a[i]=r.charCodeAt(i);return a}
 function b64(a){var s="";a=new Uint8Array(a);for(var i=0;i<a.length;i++)s+=String.fromCharCode(a[i]);return btoa(s).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"")}
 function hex(a){return Array.prototype.map.call(new Uint8Array(a),function(x){return("0"+x.toString(16)).slice(-2)}).join("")}
-var code=decodeURIComponent(location.hash.slice(1)),parts=code.split("."),sec,name,key,tc,tr,stopped=false,seen={},ctx,osc,wake;
+var allowCam=false,torchTrack=null,code=decodeURIComponent(location.hash.slice(1)),parts=code.split("."),sec,name,key,tc,tr,stopped=false,seen={},ctx,osc,wake;
 function log(s){$("log").textContent=new Date().toLocaleTimeString()+" · "+s+"\n"+$("log").textContent}
 async function topic(d){var h=await crypto.subtle.digest("SHA-256",new Uint8Array([].concat(Array.from(sec),Array.from(enc.encode("|arche-spare|"+d)))));return"arche"+hex(h).slice(0,40)}
 async function seal(t){var iv=crypto.getRandomValues(new Uint8Array(12)),ct=new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM",iv:iv},key,enc.encode(t))),o=new Uint8Array(12+ct.length);o.set(iv);o.set(ct,12);return b64(o)}
@@ -20,34 +20,44 @@ function start(){
  try{sec=ub(parts[0]);name=dec.decode(ub(parts[1]))}catch(e){$("m").innerHTML="<p>Geçersiz bağlantı.</p>";return}
  if(sec.length!=32){$("m").innerHTML="<p>Geçersiz bağlantı.</p>";return}
  $("t").textContent="Erişime izin ver?";
- $("m").innerHTML="<p><b></b> bu telefonun <b>konumunu</b> görmek, telefonu <b>çaldırmak</b> ve <b>durumunu</b> (pil, ağ) sorgulamak istiyor.</p><p>Bu telefon sana, “<span id=n2></span>” da senin telefonunsa onayla. Bağlantıyı sana başkası gönderdiyse <b>Reddet</b>.</p><p>Bu sayfa açık kaldığı sürece erişim sürer. Kapatınca ya da Kes'e basınca biter.</p>";
+ $("m").innerHTML="<p><b></b> bu telefonun <b>konumunu</b> görmek, telefonu <b>çaldırmak</b> ve <b>durumunu</b> (pil, ağ) sorgulamak istiyor.</p><p>Bu telefon sana, “<span id=n2></span>” da senin telefonunsa onayla. Bağlantıyı sana başkası gönderdiyse <b>Reddet</b>.</p><p><label><input type=checkbox id=cam> Kameraya da izin ver (fotoğraf çekme, fener). Çekim sırasında ekranda kırmızı uyarı görünür.</label></p><p>Bu sayfa açık kaldığı sürece erişim sürer. Kapatınca ya da Kes'e basınca biter.</p>";
  $("m").getElementsByTagName("b")[0].textContent=name;$("n2").textContent=name;
  $("b").innerHTML='<button class="ok" id="y">Onayla</button><button class="no" id="x">Reddet</button>';
  $("x").onclick=function(){document.body.innerHTML="<p>Reddedildi. Sayfayı kapatabilirsin.</p>"};
  $("y").onclick=go}
 async function go(){
+ allowCam=!!($("cam")&&$("cam").checked);
  key=await crypto.subtle.importKey("raw",sec,"AES-GCM",false,["encrypt","decrypt"]);tc=await topic("c");tr=await topic("r");
  try{ctx=new(window.AudioContext||window.webkitAudioContext)();ctx.resume()}catch(e){}
  try{navigator.geolocation.getCurrentPosition(function(){},function(){},{enableHighAccuracy:true})}catch(e){}
  try{wake=await navigator.wakeLock.request("screen")}catch(e){}
- $("t").textContent="Uzaktan erişim AÇIK";$("m").innerHTML='<div class="bar">Bu telefon şu kişi tarafından sorgulanabilir: <b></b>. Bu sayfayı açık tut.</div>';
- $("m").getElementsByTagName("b")[0].textContent=name;
+ $("t").textContent="Uzaktan erişim AÇIK";$("m").innerHTML='<div class="bar">Bu telefon şu kişi tarafından sorgulanabilir: <b></b>. Bu sayfayı açık tut.<br>Kamera: <span id=cs></span></div>';
+ $("m").getElementsByTagName("b")[0].textContent=name;$("cs").textContent=allowCam?"izinli":"kapalı";
  $("b").innerHTML='<button class="no" id="k">Bağlantıyı kes</button>';
  $("k").onclick=function(){stopped=true;stopRing();if(wake)try{wake.release()}catch(e){}document.body.innerHTML="<p>Bağlantı kesildi. Sayfayı kapatabilirsin.</p>"};
  log("bağlandı");listen()}
-function stopRing(){try{if(osc){osc.stop();osc=null}}catch(e){}}
+function stopRing(){try{if(osc){osc.stop();osc=null}}catch(e){}try{navigator.vibrate(0)}catch(e){}}
+function warn(t,ms){var d=document.createElement('div');d.style.cssText='position:fixed;left:0;right:0;top:0;background:#c62828;color:#fff;padding:14px;text-align:center;font-weight:bold;z-index:9';d.textContent=t;document.body.appendChild(d);setTimeout(function(){d.remove()},ms)}
+function msgBox(t){var d=document.createElement('div');d.style.cssText='position:fixed;inset:0;background:#000d;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;font-size:24px;z-index:9';var p=document.createElement('div');p.textContent=name+': '+t;var b=document.createElement('button');b.textContent='Tamam';b.className='ok';b.onclick=function(){d.remove()};d.appendChild(p);d.appendChild(b);document.body.appendChild(d)}
+async function cam(side){var s=await navigator.mediaDevices.getUserMedia({video:{facingMode:side=='on'?'user':'environment',width:{ideal:640}}});return s}
+async function foto(side){warn('Kamera kullanılıyor: '+name,3500);var s=await cam(side),v=document.createElement('video');v.srcObject=s;v.muted=true;v.playsInline=true;await v.play();await new Promise(function(r){setTimeout(r,900)});var w=320,h=Math.round(w*v.videoHeight/v.videoWidth)||240,c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(v,0,0,w,h);s.getTracks().forEach(function(t){t.stop()});var d=c.toDataURL('image/jpeg',0.5).split(',')[1],n=Math.ceil(d.length/2400),a=[];for(var i=0;i<n;i++)a.push('IMG:'+(i+1)+':'+n+':'+d.slice(i*2400,(i+1)*2400));return a}
 function ring(){stopRing();osc=ctx.createOscillator();var g=ctx.createGain();g.gain.value=1;osc.type="square";osc.connect(g);g.connect(ctx.destination);osc.start();
  var f=0,iv=setInterval(function(){if(!osc){clearInterval(iv);return}osc.frequency.value=f++%2?900:1400;if(navigator.vibrate)navigator.vibrate(300)},400);
  setTimeout(stopRing,30000)}
-async function run(c){
+async function run(line){var i=line.indexOf('|'),c=(i<0?line:line.slice(0,i)).trim().toUpperCase(),arg=i<0?'':line.slice(i+1);
  if(c=="KONUM"){log("konum istendi");return await new Promise(function(r){navigator.geolocation.getCurrentPosition(function(p){r("şimdi, ±"+Math.round(p.coords.accuracy)+" m|"+p.coords.latitude.toFixed(6)+"|"+p.coords.longitude.toFixed(6))},function(e){r("Konum alınamadı: "+e.message)},{enableHighAccuracy:true,timeout:25000,maximumAge:0})})}
  if(c=="CAL"){log("çaldır istendi");try{await ctx.resume();ring();return"çalıyor (30 sn)"}catch(e){return"çalınamadı"}}
  if(c=="BILGI"){log("durum istendi");var s="";try{var b=await navigator.getBattery();s="pil %"+Math.round(b.level*100)+(b.charging?" (şarjda)":"")}catch(e){s="pil bilinmiyor"}var n=navigator.connection;return s+", ağ "+(n&&n.effectiveType?n.effectiveType:"bilinmiyor")}
+ if(c=="STOP"){log("durdur istendi");stopRing();if(torchTrack){try{torchTrack.stop()}catch(e){}torchTrack=null}return"durduruldu"}
+ if(c=="TITRET"){log("titret istendi");if(!navigator.vibrate)return"Bu tarayıcı titreşimi desteklemiyor";navigator.vibrate([600,200,600,200,600,200,600]);return"titriyor"}
+ if(c=="MESAJ"){log("mesaj geldi");msgBox(arg.slice(0,300));try{await ctx.resume();var o=ctx.createOscillator();o.connect(ctx.destination);o.frequency.value=880;o.start();setTimeout(function(){o.stop()},400)}catch(e){}return"mesaj gösterildi"}
+ if(c=="FOTO"){log("fotoğraf istendi");if(!allowCam)return"Kamera izni verilmedi (yedek telefonda onay sırasında kapalı)";try{return await foto(arg.trim()=="on"?"on":"back")}catch(e){return"Kamera açılamadı: "+e.message}}
+ if(c=="FENER"){log("fener istendi");if(!allowCam)return"Kamera izni verilmedi";try{if(arg.trim()=="off"){if(torchTrack){torchTrack.stop();torchTrack=null}return"fener kapandı"}warn('Kamera/fener kullanılıyor: '+name,2500);var s=await cam('back');var t=s.getVideoTracks()[0];await t.applyConstraints({advanced:[{torch:true}]});torchTrack=t;return"fener açık"}catch(e){return"Fener açılamadı: "+e.message}}
  return"Bu sürüm bu komutu desteklemiyor"}
 async function handle(line){
  try{var p=(await open(line)).split("|"),now=Math.floor(Date.now()/1000);if(p.length<3||Math.abs(now-parseInt(p[0]))>180||seen[p[1]])return;seen[p[1]]=1;
-  var res=await run(p.slice(2).join("|").trim().toUpperCase());
-  await fetch(RELAY+"/"+tr,{method:"POST",body:await seal(now+"|"+p[1]+"|"+res)})}catch(e){}}
+  var res=await run(p.slice(2).join("|").trim());var arr=Array.isArray(res)?res:[res];
+  for(var k=0;k<arr.length;k++){await fetch(RELAY+"/"+tr,{method:"POST",body:await seal(now+"|"+p[1]+"|"+arr[k])});if(arr.length>1)await new Promise(function(r){setTimeout(r,250)})}}catch(e){log("hata: "+e.message)}}
 async function listen(){var since=Math.floor(Date.now()/1000);
  while(!stopped){try{var r=await fetch(RELAY+"/"+tc+"/raw?since="+since),rd=r.body.getReader(),buf="";
   while(!stopped){var x=await rd.read();if(x.done)break;buf+=dec.decode(x.value,{stream:true});var ls=buf.split("\n");buf=ls.pop();
