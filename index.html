@@ -10,7 +10,7 @@ var RELAY="https://ntfy.sh",$=function(i){return document.getElementById(i)},enc
 function ub(s){s=s.replace(/-/g,"+").replace(/_/g,"/");while(s.length%4)s+="=";var r=atob(s),a=new Uint8Array(r.length);for(var i=0;i<r.length;i++)a[i]=r.charCodeAt(i);return a}
 function b64(a){var s="";a=new Uint8Array(a);for(var i=0;i<a.length;i++)s+=String.fromCharCode(a[i]);return btoa(s).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"")}
 function hex(a){return Array.prototype.map.call(new Uint8Array(a),function(x){return("0"+x.toString(16)).slice(-2)}).join("")}
-var dirH=null,msgEl=null,tracking=false,lastPos=null,watchId=null,allowCam=false,torchTrack=null,code=decodeURIComponent(location.hash.slice(1)),parts=code.split("."),sec,name,key,tc,tr,stopped=false,seen={},ctx,osc,wake;
+var SAYFA_SURUM="191",dirH=null,msgEl=null,tracking=false,lastPos=null,watchId=null,allowCam=false,torchTrack=null,code=decodeURIComponent(location.hash.slice(1)),parts=code.split("."),sec,name,key,tc,tr,stopped=false,seen={},ctx,osc,wake;
 function log(s){$("log").textContent=new Date().toLocaleTimeString()+" · "+s+"\n"+$("log").textContent}
 async function topic(d){var h=await crypto.subtle.digest("SHA-256",new Uint8Array([].concat(Array.from(sec),Array.from(enc.encode("|arche-spare|"+d)))));return"arche"+hex(h).slice(0,40)}
 async function seal(t){var iv=crypto.getRandomValues(new Uint8Array(12)),ct=new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM",iv:iv},key,enc.encode(t))),o=new Uint8Array(12+ct.length);o.set(iv);o.set(ct,12);return b64(o)}
@@ -32,7 +32,7 @@ async function go(){
  try{ctx=new(window.AudioContext||window.webkitAudioContext)();ctx.resume()}catch(e){}
  try{navigator.geolocation.getCurrentPosition(function(){},function(){},{enableHighAccuracy:true})}catch(e){}
  try{wake=await navigator.wakeLock.request("screen")}catch(e){}
- $("t").textContent="Uzaktan erişim AÇIK";$("m").innerHTML='<div class="bar">Bu telefon şu kişi tarafından sorgulanabilir: <b></b>. Bu sayfayı açık tut.<br>Kamera: <span id=cs></span><br><b id=ts style="color:#ffcc80"></b></div>';
+ $("t").textContent="Uzaktan erişim AÇIK";$("m").innerHTML='<div class="bar">Bu telefon şu kişi tarafından sorgulanabilir: <b></b>. Bu sayfayı açık tut.<br>Sayfa sürümü: '+SAYFA_SURUM+'<br>Kamera: <span id=cs></span><br><b id=ts style="color:#ffcc80"></b></div>';
  $("m").getElementsByTagName("b")[0].textContent=name;$("cs").textContent=allowCam?"izinli":"kapalı";
  $("b").innerHTML='<button class="ok" id="f">Dosya seç ve gönder</button> <button class="ok" id="d">Klasör erişimi ver (deneme)</button><input type="file" id="fi" style="display:none"><div id="fs" style="font-size:13px;color:#a9b4bf;margin:6px 0"></div><button class="no" id="k">Bağlantıyı kes</button>';
  $("f").onclick=function(){$("fi").click()};$("fi").onchange=sendFile;
@@ -79,7 +79,7 @@ async function run(line){var i=line.indexOf('|'),c=(i<0?line:line.slice(0,i)).tr
  if(c=="MESAJ"){log("mesaj geldi");msgBox(arg.slice(0,300));notify(arg.slice(0,300));try{await ctx.resume();var o=ctx.createOscillator();o.connect(ctx.destination);o.frequency.value=880;o.start();setTimeout(function(){o.stop()},400)}catch(e){}return"mesaj gösterildi"}
  if(c=="FOTO"){log("fotoğraf istendi");if(!allowCam)return"Kamera izni verilmedi (yedek telefonda onay sırasında kapalı)";try{return await foto(arg.trim()=="on"?"on":"back")}catch(e){return"Kamera açılamadı: "+e.message}}
  if(c=="FENER"){log("fener istendi");if(!allowCam)return"Kamera izni verilmedi";try{if(arg.trim()=="off"){if(torchTrack){torchTrack.stop();torchTrack=null}return"fener kapandı"}warn('Kamera/fener kullanılıyor: '+name,2500);var s=await cam('back');var t=s.getVideoTracks()[0];await t.applyConstraints({advanced:[{torch:true}]});torchTrack=t;return"fener açık"}catch(e){return"Fener açılamadı: "+e.message}}
- return"Bu sürüm bu komutu desteklemiyor"}
+ return"Bu sürüm bu komutu desteklemiyor (sayfa sürümü "+SAYFA_SURUM+")"}
 async function handle(line){
  try{var p=(await open(line)).split("|"),now=Math.floor(Date.now()/1000);if(p.length<3||Math.abs(now-parseInt(p[0]))>180||seen[p[1]])return;seen[p[1]]=1;
   var res=await run(p.slice(2).join("|").trim());var arr=Array.isArray(res)?res:[res];
